@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>가위바위보 룰렛</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px 14px;
+      background: #f1f5fb;
+      color: #172338;
+      font-family: system-ui, -apple-system, "Malgun Gothic", "맑은 고딕", sans-serif;
+    }
+    main {
+      width: min(100%, 760px);
+      padding: 28px 16px 36px;
+      border-radius: 28px;
+      background: #fff;
+      box-shadow: 0 16px 48px rgba(23, 35, 56, .10);
+      text-align: center;
+    }
+    h1 { margin: 0 0 12px; font-size: clamp(32px, 6vw, 48px); }
+    .result {
+      min-height: 1.6em;
+      margin: 0 0 12px;
+      font-size: clamp(30px, 6vw, 50px);
+      font-weight: 900;
+      line-height: 1.6;
+    }
+    .roulette {
+      position: relative;
+      width: min(82vw, 440px);
+      margin: 0 auto 28px;
+      padding-top: 18px;
+    }
+    .pointer {
+      position: absolute;
+      z-index: 2;
+      top: 0;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-left: 24px solid transparent;
+      border-right: 24px solid transparent;
+      border-top: 42px solid #172338;
+      transform: translateX(-50%);
+      filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .2));
+    }
+    .wheel {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      border: 10px solid #fff;
+      border-radius: 50%;
+      background: conic-gradient(
+        from -60deg,
+        #c93845 0deg 120deg,
+        #dfa225 120deg 240deg,
+        #1768ad 240deg 360deg
+      );
+      box-shadow: 0 0 0 6px #172338, 0 14px 26px rgba(23, 35, 56, .2);
+      will-change: transform;
+    }
+    .wheel::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 12%;
+      aspect-ratio: 1;
+      border: 5px solid #fff;
+      border-radius: 50%;
+      background: #172338;
+      transform: translate(-50%, -50%);
+    }
+    .choice {
+      position: absolute;
+      display: grid;
+      justify-items: center;
+      gap: 2px;
+      width: 30%;
+      color: #fff;
+      font-size: clamp(28px, 6vw, 42px);
+      font-weight: 900;
+      line-height: 1.1;
+      text-shadow: 0 2px 3px rgba(0, 0, 0, .28);
+      transform: translate(-50%, -50%);
+    }
+    .choice span { font-size: clamp(38px, 9vw, 62px); }
+    .scissors { left: 50%; top: 23%; }
+    .rock { left: 75%; top: 67%; }
+    .paper { left: 25%; top: 67%; }
+    .buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+    button {
+      min-width: 200px;
+      min-height: 72px;
+      padding: 14px 24px;
+      border: 0;
+      border-radius: 16px;
+      background: #174fba;
+      color: #fff;
+      font: 800 26px/1.25 system-ui, -apple-system, "Malgun Gothic", "맑은 고딕", sans-serif;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:focus-visible { outline: 4px solid #e29c00; outline-offset: 4px; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    #again { background: #3b4e68; }
+    .hint { margin: 20px 0 0; font-size: 19px; color: #4d5b70; }
+    @media (max-width: 470px) {
+      .buttons button { width: 100%; }
+      .roulette { margin-bottom: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>가위바위보 룰렛</h1>
+    <p id="result" class="result" role="status" aria-live="polite">돌리기를 눌러 주세요</p>
+
+    <div class="roulette">
+      <div class="pointer" aria-hidden="true"></div>
+      <div id="wheel" class="wheel" role="img" aria-label="가위, 바위, 보가 똑같이 나뉜 룰렛">
+        <div class="choice scissors" aria-hidden="true"><span>✌️</span>가위</div>
+        <div class="choice rock" aria-hidden="true"><span>✊</span>바위</div>
+        <div class="choice paper" aria-hidden="true"><span>✋</span>보</div>
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button id="spin" type="button">돌리기</button>
+      <button id="again" type="button" disabled>다시 돌리기</button>
+    </div>
+    <p class="hint">위쪽 화살표가 가리킨 칸이 결과예요.</p>
+  </main>
+
+  <script>
+    const choices = ['가위', '바위', '보'];
+    const wheel = document.getElementById('wheel');
+    const result = document.getElementById('result');
+    const spinButton = document.getElementById('spin');
+    const againButton = document.getElementById('again');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let rotation = 0;
+    let selected = 0;
+    let spinning = false;
+
+    function finishSpin() {
+      result.textContent = `결과: ${choices[selected]}!`;
+      spinButton.disabled = false;
+      againButton.disabled = false;
+      spinning = false;
+    }
+
+    function spin() {
+      if (spinning) return;
+      spinning = true;
+      spinButton.disabled = true;
+      againButton.disabled = true;
+      result.textContent = '룰렛이 돌아가고 있어요…';
+
+      selected = Math.floor(Math.random() * choices.length);
+      const offset = Math.random() * 50 - 25; // 경계선에서 충분히 떨어진 곳에 정지
+      const target = (360 - selected * 120 + offset + 360) % 360;
+      const current = ((rotation % 360) + 360) % 360;
+      const adjustment = (target - current + 360) % 360;
+      rotation += 360 * 6 + adjustment;
+
+      if (reduceMotion.matches) {
+        wheel.style.transition = 'none';
+        wheel.style.transform = `rotate(${rotation}deg)`;
+        finishSpin();
+        return;
+      }
+
+      wheel.style.transition = 'transform 4s cubic-bezier(.12, .72, .12, 1)';
+      requestAnimationFrame(() => {
+        wheel.style.transform = `rotate(${rotation}deg)`;
+      });
+    }
+
+    wheel.addEventListener('transitionend', event => {
+      if (event.propertyName === 'transform' && spinning) finishSpin();
+    });
+    spinButton.addEventListener('click', spin);
+    againButton.addEventListener('click', spin);
+  </script>
+</body>
+</html>
